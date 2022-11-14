@@ -5,6 +5,7 @@ class _AccountBase(object):
         self.neighbors_ids = []
         self.transactions = []
         self.neighbors = []
+        self.is_fraud = False
 
     def add_neighbor(self, neighbor):
         if (neighbor.id not in self.neighbors_ids) and (neighbor.id != self.id):
@@ -26,6 +27,13 @@ class _AccountBase(object):
 
     def add_transaction(self, transaction):
         self.transactions.append(transaction)
+        try:
+            trans_fraud_flag = getattr(transaction, "fraud_flag")
+        except Exception:
+            return
+        else:
+            if trans_fraud_flag:
+                self.is_fraud = True
 
     def get_transactions(self):
         return self.transactions

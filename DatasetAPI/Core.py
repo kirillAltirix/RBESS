@@ -105,8 +105,8 @@ class CMethodsTable(object):
         self.methods_layers = []
         self.methods_buffer = []
 
-    def __call__(self, rule_id):
-        prev_method_return = self.methods_layers[0][rule_id]("-")
+    def __call__(self, account, rule_id):
+        prev_method_return = self.methods_layers[0][rule_id](account)
         for i in range(1, len(self.methods_layers)):
             method = self.methods_layers[i][rule_id]
             prev_method_return = method(prev_method_return)
