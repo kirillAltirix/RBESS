@@ -13,6 +13,7 @@ class DB(object):
         self.pd = pd.DataFrame()
         self.accounts = []
         self.accounts_addresses = []
+        self.frauds_num = 0
 
     def init(self):
         config = configparser.ConfigParser()
@@ -39,13 +40,16 @@ class DB(object):
             amount = row[self.transaction_db.amount_name]
             timestamp = time.strptime(row[self.transaction_db.timestamp_name],
                                       config["Transaction_Base"]["time_format"])
+
             source = row[self.transaction_db.source_name]
             target = row[self.transaction_db.target_name]
-            transaction = Transactions.Transaction(amount, timestamp, source, target)
+            transaction_source = Transactions.Transaction(amount, timestamp, source, target, False)
+            transaction_target = Transactions.Transaction(amount, timestamp, source, target, True)
 
             for option in self.transaction_db.options:
                 attribute_value = getattr(self.transaction_db, option + "_name")
-                setattr(transaction, option, row[attribute_value])
+                setattr(transaction_source, option, row[attribute_value])
+                setattr(transaction_target, option, row[attribute_value])
 
             source_account_flag = False
             target_account_flag = False
@@ -67,8 +71,8 @@ class DB(object):
             target_account.add_neighbor(source_account)
             source_account.add_neighbor(target_account)
 
-            for acc in [target_account, source_account]:
-                acc.add_transaction(transaction)
+            source_account.add_transaction(transaction_source)
+            target_account.add_transaction(transaction_target)
 
             if source_account_flag:
                 self.accounts.append(source_account)
@@ -78,11 +82,31 @@ class DB(object):
                 self.accounts.append(target_account)
                 self.accounts_addresses.append(target)
 
+        j = 0
+        for i in range(0, len(self.accounts)):
+            if self.accounts[i].is_fraud:
+                account_temp = self.accounts[j]
+                account_addr_temp = self.accounts_addresses[j]
+
+                self.accounts[j] = self.accounts[i]
+                self.accounts_addresses[j] = self.accounts_addresses[i]
+
+                self.accounts[i] = account_temp
+                self.accounts_addresses[i] = account_addr_temp
+
+                j += 1
+        self.frauds_num = j
+
+
+def get(input_param):
+    return input_param
+
 
 class CMethod(object):
     def __init__(self, method, params):
         self.method = method
         self.params = params
+        self.method_name = method.__name__
 
     def __call__(self, prev_params):
         if self.params != 0:
@@ -99,6 +123,11 @@ class CMethod(object):
             else:
                 return self.method()
 
+    @staticmethod
+    def init_empty_method():
+        method = CMethod(get, 0)
+        return method
+
 
 class CMethodsTable(object):
     def __init__(self):
@@ -108,8 +137,9 @@ class CMethodsTable(object):
     def __call__(self, account, rule_id):
         prev_method_return = self.methods_layers[0][rule_id](account)
         for i in range(1, len(self.methods_layers)):
-            method = self.methods_layers[i][rule_id]
-            prev_method_return = method(prev_method_return)
+            if len(self.methods_layers[i]) >= rule_id - 1:
+                method = self.methods_layers[i][rule_id]
+                prev_method_return = method(prev_method_return)
 
         return prev_method_return
 
@@ -131,6 +161,7 @@ class CMethodsTable(object):
     def construct_table(self):
         self._construct_table(0)
         self.methods_buffer = []
+        self.adjust_table()
 
     def _construct_table(self, layer_id):
         counter = 0
@@ -151,6 +182,18 @@ class CMethodsTable(object):
                     counter += 1
 
         return counter
+
+    def adjust_table(self):
+        max_len = 0
+
+        for layer in self.methods_layers:
+            if len(layer) > max_len:
+                max_len = len(layer)
+
+        for layer in self.methods_layers:
+            layer_len = len(layer)
+            for i in range(layer_len, max_len):
+                layer.append(CMethod.init_empty_method())
 
     def get_len(self):
         return len(self.methods_layers[0])

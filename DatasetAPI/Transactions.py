@@ -1,3 +1,6 @@
+import time
+import warnings
+
 class _TransactionDBBase(object):
     def __init__(self, amount_name, timestamp_name, source_name, target_name):
         self.amount_name = amount_name
@@ -15,25 +18,71 @@ class TransactionDB(_TransactionDBBase):
 
 # Parent class for basic functionality
 class _TransactionBase(object):
-    def __init__(self, amount, timestamp, source, target):
+    def __init__(self, amount, timestamp, source, target, direction_in):
         self.amount = amount
         self.timestamp = timestamp
         self.source = source
         self.target = target
+        self.direction_in = direction_in
 
 
 # Child class to add new options
 class Transaction(_TransactionBase):
-    def __init__(self, amount, timestamp, source, target):
-        _TransactionBase.__init__(self, amount, timestamp, source, target)
+    def __init__(self, amount, timestamp, source, target, direction_in):
+        _TransactionBase.__init__(self, amount, timestamp, source, target, direction_in)
         self.options = []
 
 
 class TransactionsFilter(object):
+    @staticmethod
+    def get_transactions(accounts):
+        transactions = []
+
+        if not isinstance(accounts, list):
+            accounts = [accounts]
+
+        for account in accounts:
+            transactions += account.get_transactions()
+        return transactions
+
+    @staticmethod
+    def get_chained_transactions(accounts):
+        transactions = []
+
+        if not isinstance(accounts, list):
+            accounts = [accounts]
+
+        for account in accounts:
+            for i in range(0, len(account.get_transactions())):
+                for j in range(i + 1, len(account.get_transactions())):
+                    transaction_i = account.get_transactions()[i]
+                    transaction_j = account.get_transactions()[j]
+
+                    if abs(transaction_i.amount - transaction_j.amount) < 1 and transaction_i.direction_in != transaction_j.direction_in:
+                        transactions.append(transaction_i)
+                        transactions.append(transaction_j)
+
+        return transactions
+
+    @staticmethod
+    def get_night_transaction(accounts):
+        transactions = []
+
+        if not isinstance(accounts, list):
+            accounts = [accounts]
+
+        for account in accounts:
+            for transaction in account.get_transactions():
+                trans_hour = transaction.timestamp.tm_hour
+                if 22 <= trans_hour or trans_hour <= 7:
+                    transactions.append(transaction)
+        return transactions
+
     # decorator for _get_last_n_transactions() method
     @staticmethod
     def get_last_n_transactions(params_set):
         if len(params_set) != 2:
+            warnings.warn("get_last_n_transactions()")
             return []
         accounts = params_set[0]
         trans_num = params_set[1]
@@ -56,6 +105,7 @@ class TransactionsFilter(object):
     @staticmethod
     def get_transactions_by_time(params_set):
         if len(params_set) != 3:
+            warnings.warn("get_transactions_by_time()")
             return []
         accounts = params_set[0]
         time_from = params_set[1]

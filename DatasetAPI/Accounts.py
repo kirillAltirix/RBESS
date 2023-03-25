@@ -1,3 +1,6 @@
+import warnings
+
+
 # Parent class for basic functionality
 class _AccountBase(object):
     def __init__(self, id):
@@ -43,12 +46,14 @@ class _AccountBase(object):
 class Account(_AccountBase):
     def __init__(self, id):
         _AccountBase.__init__(self, id)
+        self.features = []
 
 
 class AccountsFilter(object):
     @staticmethod
     def get_neighbors(params):
         if len(params) != 2:
+            warnings.warn("get_neighbors()")
             return []
         account = params[0]
         level = params[1]

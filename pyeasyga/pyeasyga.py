@@ -125,11 +125,13 @@ class GeneticAlgorithm(object):
         """
         # If using a single worker, run on a simple for loop to avoid losing
         # time creating processes.
+        print("--GA Log: fitness calculation: ", end='')
         if n_workers == 1:
 
             for individual in self.current_generation:
                 individual.fitness = self.fitness_function(
                     individual.genes, self.seed_data)
+                print("|", end='')
         else:
 
             if "process" in parallel_type.lower():
@@ -147,6 +149,7 @@ class GeneticAlgorithm(object):
 
             for individual, result in zip(self.current_generation, results):
                 individual.fitness = result
+        print("")
 
     def rank_population(self):
         """Sort the population by fitness according to the order defined by
@@ -218,10 +221,15 @@ class GeneticAlgorithm(object):
                 n_workers=n_workers, parallel_type=parallel_type
             )
 
-        for _ in range(1, self.generations):
+        print("--GA Log: generation 1:")
+        print("        - best individual fitness =", round(self.current_generation[0].fitness, 3))
+
+        for gen_id in range(1, self.generations):
             self.create_next_generation(
                 n_workers=n_workers, parallel_type=parallel_type
             )
+            print("--GA Log: generation ", gen_id + 1, ":")
+            print("        - best individual fitness =", round(self.current_generation[0].fitness, 3))
 
     def best_individual(self):
         """Return the individual with the best fitness in the current
