@@ -6,6 +6,7 @@ import statistics
 import random
 import pyeasyga.pyeasyga as pyga
 import pandas as pd
+import json
 
 
 def get_execution_time_string(total_execution_time):
@@ -44,35 +45,41 @@ def init_db():
 
 
 def init_methods_table(make_prediction=True):
+    norm_values = []
+    for val in range(0, 100):
+        list_val = [val / 100]
+        norm_values.append(list_val)
     print("--Process Log: start constructing methods table")
     methods_table = Core.CMethodsTable()
-    methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2], [3]], 0)
-    methods_table.add_method(Ts.TransactionsFilter.get_last_n_transactions, [[2], [3]], 1)
+    methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2]], 0)
+    methods_table.add_method(Ts.TransactionsFilter.get_last_n_transactions, [[2], [3], [4]], 1)
     methods_table.add_method(Ts.TransactionsFilter.get_amounts, 0, 2)
     methods_table.add_method(statistics.stdev, 0, 3)
     if make_prediction:
-        methods_table.add_method(Ts.TransactionsFilter.greater_than, [[200], [220], [240], [260], [280]], 4)
+        methods_table.add_method(Ts.TransactionsFilter.greater_than, norm_values, 4)
+        methods_table.add_method(Ts.TransactionsFilter.smaller_than, norm_values, 4)
     methods_table.construct_table()
 
-    methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1]], 0)
+    methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2]], 0)
     methods_table.add_method(len, 0, 1)
     if make_prediction:
-        methods_table.add_method(Ts.TransactionsFilter.greater_than, [[2], [3], [4]], 2)
+        methods_table.add_method(Ts.TransactionsFilter.greater_than, [[10], [20], [30], [40], [50], [100], [200], [500], [1000]], 2)
     methods_table.construct_table()
 
     methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2]], 0)
     methods_table.add_method(Ts.TransactionsFilter.get_transactions, 0, 1)
     methods_table.add_method(len, 0, 2)
     if make_prediction:
-        methods_table.add_method(Ts.TransactionsFilter.greater_than, [[200], [250], [300], [350], [400]], 3)
+        methods_table.add_method(Ts.TransactionsFilter.greater_than, [[1000], [2000], [3000], [5000], [10000], [20000], [50000]], 3)
     methods_table.construct_table()
 
-    methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2], [3]], 0)
+    methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2]], 0)
     methods_table.add_method(Ts.TransactionsFilter.get_last_n_transactions, [[2], [3]], 1)
     methods_table.add_method(Ts.TransactionsFilter.get_amounts, 0, 2)
     methods_table.add_method(statistics.mean, 0, 3)
     if make_prediction:
-        methods_table.add_method(Ts.TransactionsFilter.greater_than, [[540], [580], [600], [620], [640]], 4)
+        methods_table.add_method(Ts.TransactionsFilter.greater_than, norm_values, 4)
+        methods_table.add_method(Ts.TransactionsFilter.smaller_than, norm_values, 4)
     methods_table.construct_table()
 
     '''methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2], [3]], 0)
@@ -89,6 +96,7 @@ def init_methods_table(make_prediction=True):
         methods_table.add_method(Ts.TransactionsFilter.greater_than, [[1], [2], [3]], 3)
     methods_table.construct_table()'''
 
+    print(f"--Process Log: features number: {methods_table.get_len()}")
     print("--Process Log: finish constructing methods table")
     return methods_table
 
@@ -148,11 +156,49 @@ def fitness(individual, data):
         return calc_f1(true_pos, false_pos, false_neg)
 
 
+def calc_confusion_matrix(individual, data) -> list:
+    true_pos = 0
+    true_neg = 0
+    false_pos = 0
+    false_neg = 0
+
+    for id in data[2]:
+        account = data[0].accounts[id]
+        true_num = 0
+        false_num = 0
+        rule_id = 0
+        for rule_trigger in individual:
+            if rule_trigger == 1:
+                res = account.features[rule_id]
+                if res:
+                    true_num += 1
+                else:
+                    false_num += 1
+            rule_id += 1
+
+        if true_num == 0 and false_num == 0:
+            break
+        local_res = False
+        if true_num > false_num:
+            local_res = True
+
+        if local_res and account.is_fraud:
+            true_pos += 1
+        elif local_res and not account.is_fraud:
+            false_pos += 1
+        elif not local_res and account.is_fraud:
+            false_neg += 1
+        elif not local_res and not account.is_fraud:
+            true_neg += 1
+
+    return [true_pos, false_pos, false_neg, true_neg]
+
+
 def run_ga(data):
     print("--Process Log: start genetic algorithm")
     start_time = time.time()
-    population_size = 40
-    generations = 50
+    population_size = 100
+    generations = 5000
     ga = pyga.GeneticAlgorithm(data[1].get_len(), data, population_size, generations)
     ga.fitness_function = fitness
     ga.run(1)
@@ -208,6 +254,26 @@ def export_features(db, path, format):
     print("--Process Log: finished export")
 
 
+def process_individual() -> list:
+    file = open("individual.txt")
+    str_individual = file.read()
+    str_individual = json.loads(str_individual)
+    individual = []
+    for gen in str_individual:
+        individual.append(gen)
+    return individual
+
+
+def print_confusion():
+    individual = process_individual()
+    db = init_db()
+    methods_table = init_methods_table()
+    create_features(db, methods_table)
+    accounts_ids = init_account_ids(db)
+    data = [db, methods_table, accounts_ids]
+    print(calc_confusion_matrix(individual, data))
+
+
 def go_algo():
     db = init_db()
     methods_table = init_methods_table()
@@ -218,9 +284,9 @@ def go_algo():
 
 def calc_features():
     db = init_db()
-    methods_table_bool = init_methods_table()
-    create_features(db, methods_table_bool)
-    export_features(db, ".\\rbess_features_bool", "csv")
+    # methods_table_bool = init_methods_table()
+    # create_features(db, methods_table_bool)
+    # export_features(db, ".\\rbess_features_bool", "csv")
     methods_table_val = init_methods_table(False)
     create_features(db, methods_table_val)
     export_features(db, ".\\rbess_features_val", "csv")
@@ -228,7 +294,8 @@ def calc_features():
 
 def main():
     # go_algo()
-    calc_features()
+    # calc_features()
+    print_confusion()
 
 
 # Press the green button in the gutter to run the script.

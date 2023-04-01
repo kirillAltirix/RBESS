@@ -30,6 +30,9 @@ class DB(object):
             config["Transaction_Base"]["trans_to"]
         )
 
+        min_amount = self.pd[self.transaction_db.amount_name].min()
+        max_amount = self.pd[self.transaction_db.amount_name].max()
+
         for property_trans_name in config.options("Transaction"):
             property_trans_value = config["Transaction"][property_trans_name]
             setattr(Transactions.TransactionDB, property_trans_name + "_name", property_trans_value)
@@ -38,6 +41,7 @@ class DB(object):
 
         for index, row in self.pd.iterrows():
             amount = row[self.transaction_db.amount_name]
+            amount = (amount - min_amount) / (max_amount - min_amount)
             timestamp = time.strptime(row[self.transaction_db.timestamp_name],
                                       config["Transaction_Base"]["time_format"])
 
