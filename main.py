@@ -46,13 +46,13 @@ def init_db():
 
 def init_methods_table(make_prediction=True):
     norm_values = []
-    for val in range(0, 100):
+    for val in range(0, 100, 2):
         list_val = [val / 100]
         norm_values.append(list_val)
     print("--Process Log: start constructing methods table")
     methods_table = Core.CMethodsTable()
     methods_table.add_method(Acc.AccountsFilter.get_neighbors, [[1], [2]], 0)
-    methods_table.add_method(Ts.TransactionsFilter.get_last_n_transactions, [[2], [3], [4]], 1)
+    methods_table.add_method(Ts.TransactionsFilter.get_last_n_transactions, [[2], [3]], 1)
     methods_table.add_method(Ts.TransactionsFilter.get_amounts, 0, 2)
     methods_table.add_method(statistics.stdev, 0, 3)
     if make_prediction:
@@ -97,7 +97,7 @@ def init_methods_table(make_prediction=True):
     methods_table.construct_table()'''
 
     print(f"--Process Log: features number: {methods_table.get_len()}")
-    print("--Process Log: finish constructing methods table")
+    #print("--Process Log: finish constructing methods table")
     return methods_table
 
 
@@ -114,7 +114,7 @@ def init_account_ids(db):
     return accounts_ids
 
 
-def fitness(individual, data):
+def fitness(individual, data, compare_coefficient):
     true_pos = 0
     true_neg = 0
     false_pos = 0
@@ -138,7 +138,9 @@ def fitness(individual, data):
         if true_num == 0 and false_num == 0:
             return 0.0
         local_res = False
-        if true_num > false_num:
+        #if true_num > false_num:
+        #    local_res = True
+        if true_num >= (true_num + false_num) * compare_coefficient:
             local_res = True
 
         if local_res and account.is_fraud:
@@ -194,22 +196,24 @@ def calc_confusion_matrix(individual, data) -> list:
     return [true_pos, false_pos, false_neg, true_neg]
 
 
-def run_ga(data):
+def run_ga(data, compare_coefficient) -> list:
     print("--Process Log: start genetic algorithm")
     start_time = time.time()
-    population_size = 100
-    generations = 5000
-    ga = pyga.GeneticAlgorithm(data[1].get_len(), data, population_size, generations)
+    population_size = 500
+    generations = 80
+    ga = pyga.GeneticAlgorithm(data[1].get_len(), data, population_size, generations, compare_coefficient)
     ga.fitness_function = fitness
     ga.run(1)
     total_execution_time = time.time() - start_time
     print("--Process Log: finish genetic algorithm in", get_execution_time_string(total_execution_time))
-    print("--Process Log: Time to process 1 population:", get_execution_time_string(total_execution_time / generations))
+    '''print("--Process Log: Time to process 1 population:", get_execution_time_string(total_execution_time / generations))
     print("--Process Log: Time to process 1 individual:",
           get_execution_time_string(total_execution_time / (generations * population_size)))
     print("--Process Log: Time to process 1 gen:",
-          get_execution_time_string(total_execution_time / (generations * population_size * data[1].get_len())))
+          get_execution_time_string(total_execution_time / (generations * population_size * data[1].get_len())))'''
     print(ga.best_individual())
+    print(calc_confusion_matrix(ga.best_individual()[1], data))
+    return ga.generation_scores
 
 
 def create_features(db, methods_table):
@@ -227,7 +231,7 @@ def create_features(db, methods_table):
             account.features.append(methods_table(account, rule_id))
         iterator += 1
     print("")
-    print("--Process Log: stop creating features list")
+    #print("--Process Log: stop creating features list")
 
 
 def export_features(db, path, format):
@@ -279,7 +283,10 @@ def go_algo():
     methods_table = init_methods_table()
     create_features(db, methods_table)
     accounts_ids = init_account_ids(db)
-    run_ga([db, methods_table, accounts_ids])
+    compare_coefficients = [0.51, 0.52, 0.53, 0.54]
+    for i in range(4):
+        df = pd.DataFrame(run_ga([db, methods_table, accounts_ids], compare_coefficients[i]))
+        df.to_csv(f".\\generations_scores_{i + 1}.csv", float_format="%.3f")
 
 
 def calc_features():
@@ -293,9 +300,9 @@ def calc_features():
 
 
 def main():
-    # go_algo()
+    go_algo()
     # calc_features()
-    print_confusion()
+    # print_confusion()
 
 
 # Press the green button in the gutter to run the script.

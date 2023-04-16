@@ -24,6 +24,7 @@ class GeneticAlgorithm(object):
                  seed_data,
                  population_size=50,
                  generations=100,
+                 compare_coefficient=0.5,
                  crossover_probability=0.8,
                  mutation_probability=0.2,
                  elitism=True,
@@ -56,6 +57,8 @@ class GeneticAlgorithm(object):
         self.random = random.Random(random_state)
 
         self.current_generation = []
+        self.generation_scores = []
+        self.compare_coefficient = compare_coefficient
 
         def create_individual(size_of_individual):
             """Create a candidate solution representation.
@@ -125,13 +128,13 @@ class GeneticAlgorithm(object):
         """
         # If using a single worker, run on a simple for loop to avoid losing
         # time creating processes.
-        print("--GA Log: fitness calculation: ", end='')
+        # print("--GA Log: fitness calculation: ", end='')
         if n_workers == 1:
 
             for individual in self.current_generation:
                 individual.fitness = self.fitness_function(
-                    individual.genes, self.seed_data)
-                print("|", end='')
+                    individual.genes, self.seed_data, self.compare_coefficient)
+                # print("|", end='')
         else:
 
             if "process" in parallel_type.lower():
@@ -149,7 +152,7 @@ class GeneticAlgorithm(object):
 
             for individual, result in zip(self.current_generation, results):
                 individual.fitness = result
-        print("")
+        # print("")
 
     def rank_population(self):
         """Sort the population by fitness according to the order defined by
@@ -221,15 +224,25 @@ class GeneticAlgorithm(object):
                 n_workers=n_workers, parallel_type=parallel_type
             )
 
-        print("--GA Log: generation 1:")
-        print("        - best individual fitness =", round(self.current_generation[0].fitness, 3))
+        gen_score = self.current_generation[0].fitness
+
+        #print(f"--GA Log: generation 1 of {self.generations}: {round(gen_score, 3)}\r", end="")
+        print("--GA Log: ", end="")
+        '''print("        - best individual fitness =", round(gen_score, 3))'''
+        self.generation_scores.append(gen_score)
 
         for gen_id in range(1, self.generations):
             self.create_next_generation(
                 n_workers=n_workers, parallel_type=parallel_type
             )
-            print("--GA Log: generation ", gen_id + 1, ":")
-            print("        - best individual fitness =", round(self.current_generation[0].fitness, 3))
+            gen_score = self.current_generation[0].fitness
+            # print(f"--GA Log: generation {gen_score} of {self.generations}: {round(gen_score, 3)}\r", end="")
+            '''print("--GA Log: generation ", gen_id + 1, ":")
+            print("        - best individual fitness =", round(gen_score, 3))'''
+            if (gen_id + 1) % (self.generations // 10) == 0:
+                print("|", end="")
+            self.generation_scores.append(gen_score)
+        print("")
 
     def best_individual(self):
         """Return the individual with the best fitness in the current
